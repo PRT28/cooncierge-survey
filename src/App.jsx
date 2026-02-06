@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 
 const STEPS = [
   { id: 'profiling', title: 'Profiling' },
+  { id: 'contact', title: 'Contact' },
   { id: 'pain', title: 'Pain Points' },
   { id: 'photo', title: 'Photo' },
   { id: 'review', title: 'Review & Submit' }
@@ -15,6 +16,11 @@ const initialForm = {
     audience: ['Direct Consumers'],
     audienceOther: '',
     teamSize: 12
+  },
+  contact: {
+    name: '',
+    businessName: '',
+    phone: ''
   },
   painPoints: {
     customerEnd: {
@@ -61,15 +67,10 @@ function validateStep(stepId, form) {
   return true
 }
 
-function buildPayload(form) {
-  return {
-    profiling: form.profiling,
-    pain_points: {
-      customer_end: form.painPoints.customerEnd,
-      internal_ops: form.painPoints.internalOps,
-      supplier_end: form.painPoints.supplierEnd
-    }
-  }
+function toSelectedList(map, labelMap) {
+  return Object.entries(labelMap)
+    .filter(([key]) => map[key])
+    .map(([, label]) => label)
 }
 
 export default function App() {
@@ -102,6 +103,16 @@ export default function App() {
           ...prev.painPoints[group],
           [field]: value
         }
+      }
+    }))
+  }
+
+  function updateContact(field, value) {
+    setForm(prev => ({
+      ...prev,
+      contact: {
+        ...prev.contact,
+        [field]: value
       }
     }))
   }
@@ -160,12 +171,49 @@ export default function App() {
     setStatus({ state: 'loading', message: 'Submitting...' })
 
     try {
-      const payload = buildPayload(form)
+      const customerEndLabels = {
+        lms: 'LMS',
+        conversionTimeQuote: 'Conversion time (quote)',
+        rightCustomers: 'Right customers'
+      }
+
+      const internalOpsLabels = {
+        finance: 'Finance',
+        reports: 'Reports',
+        dk: 'DK',
+        dayToDayBookings: 'Day-to-day bookings',
+        onTripOps: 'On-trip ops management',
+        trainingNewJoinee: 'Training new joinee'
+      }
+
+      const supplierEndLabels = {
+        marketplace: 'Marketplace',
+        prices: 'Prices',
+        landPartPrices: 'Land part prices'
+      }
+
+      const customerEndList = toSelectedList(form.painPoints.customerEnd, customerEndLabels)
+      const internalOpsList = toSelectedList(form.painPoints.internalOps, internalOpsLabels)
+      const supplierEndList = toSelectedList(form.painPoints.supplierEnd, supplierEndLabels)
+
       const { data: surveyRow, error: insertError } = await supabase
         .from('surveys')
         .insert([
           {
-            data: payload,
+            contact_name: form.contact.name || null,
+            contact_business_name: form.contact.businessName || null,
+            contact_phone: form.contact.phone || null,
+            profiling_products: form.profiling.products,
+            profiling_products_other: form.profiling.productsOther || null,
+            profiling_audience: form.profiling.audience,
+            profiling_audience_other: form.profiling.audienceOther || null,
+            profiling_team_size: form.profiling.teamSize,
+            pain_points_customer_end: customerEndList,
+            pain_points_customer_other: form.painPoints.customerEnd.other || null,
+            pain_points_internal_ops: internalOpsList,
+            pain_points_internal_other: form.painPoints.internalOps.other || null,
+            pain_points_supplier_end: supplierEndList,
+            pain_points_supplier_other: form.painPoints.supplierEnd.other || null,
             created_at: new Date().toISOString()
           }
         ])
@@ -483,6 +531,42 @@ export default function App() {
     )
   }
 
+  function renderContact() {
+    return (
+      <div className="card">
+        <h2>Contact (Optional)</h2>
+        <p className="hint">Share details if you want us to follow up.</p>
+        <label className="field">
+          <span>Name</span>
+          <input
+            type="text"
+            value={form.contact.name}
+            onChange={event => updateContact('name', event.target.value)}
+            placeholder="Your name"
+          />
+        </label>
+        <label className="field">
+          <span>Business Name</span>
+          <input
+            type="text"
+            value={form.contact.businessName}
+            onChange={event => updateContact('businessName', event.target.value)}
+            placeholder="Company or brand"
+          />
+        </label>
+        <label className="field">
+          <span>Phone Number</span>
+          <input
+            type="tel"
+            value={form.contact.phone}
+            onChange={event => updateContact('phone', event.target.value)}
+            placeholder="+1 555 123 4567"
+          />
+        </label>
+      </div>
+    )
+  }
+
   function renderPhoto() {
     return (
       <div className="card">
@@ -544,6 +628,12 @@ export default function App() {
             <p><strong>Team size:</strong> {form.profiling.teamSize >= 100 ? '100+' : form.profiling.teamSize}</p>
           </div>
           <div>
+            <h4>Contact</h4>
+            <p><strong>Name:</strong> {form.contact.name || '-'}</p>
+            <p><strong>Business:</strong> {form.contact.businessName || '-'}</p>
+            <p><strong>Phone:</strong> {form.contact.phone || '-'}</p>
+          </div>
+          <div>
             <h4>Photo</h4>
             {form.photo.previewUrl ? (
               <img src={form.photo.previewUrl} alt="Preview" />
@@ -591,6 +681,7 @@ export default function App() {
 
       <main>
         {step.id === 'profiling' && renderProfiling()}
+        {step.id === 'contact' && renderContact()}
         {step.id === 'pain' && renderPainPoints()}
         {step.id === 'photo' && renderPhoto()}
         {step.id === 'review' && renderReview()}
