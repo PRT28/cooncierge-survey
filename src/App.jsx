@@ -10,9 +10,9 @@ const STEPS = [
 
 const initialForm = {
   profiling: {
-    products: 'Tours & Experiences',
+    products: ['Tours & Experiences'],
     productsOther: '',
-    audience: 'Direct Consumers',
+    audience: ['Direct Consumers'],
     audienceOther: '',
     teamSize: 12
   },
@@ -48,15 +48,15 @@ const initialForm = {
 function validateStep(stepId, form) {
   if (stepId === 'profiling') {
     const { products, audience, productsOther, audienceOther } = form.profiling
-    const productsOk = products !== 'Other' || productsOther.trim()
-    const audienceOk = audience !== 'Other' || audienceOther.trim()
+    const productsOk = products.length > 0 && (!products.includes('Other') || productsOther.trim())
+    const audienceOk = audience.length > 0 && (!audience.includes('Other') || audienceOther.trim())
     return productsOk && audienceOk
   }
   if (stepId === 'pain') {
     return true
   }
   if (stepId === 'photo') {
-    return Boolean(form.photo.file)
+    return true
   }
   return true
 }
@@ -157,11 +157,6 @@ export default function App() {
       return
     }
 
-    if (!form.photo.file) {
-      setStatus({ state: 'error', message: 'Please add a photo before submitting.' })
-      return
-    }
-
     setStatus({ state: 'loading', message: 'Submitting...' })
 
     try {
@@ -182,37 +177,39 @@ export default function App() {
       }
 
       const surveyId = surveyRow.id
-      const fileExt = form.photo.file.name.split('.').pop()
-      const fileName = `survey-${surveyId}-${Date.now()}.${fileExt}`
-      const filePath = `survey-photos/${fileName}`
+      if (form.photo.file) {
+        const fileExt = form.photo.file.name.split('.').pop()
+        const fileName = `survey-${surveyId}-${Date.now()}.${fileExt}`
+        const filePath = `survey-photos/${fileName}`
 
-      const { error: uploadError } = await supabase
-        .storage
-        .from('survey-uploads')
-        .upload(filePath, form.photo.file, {
-          contentType: form.photo.file.type,
-          upsert: false
-        })
+        const { error: uploadError } = await supabase
+          .storage
+          .from('survey-uploads')
+          .upload(filePath, form.photo.file, {
+            contentType: form.photo.file.type,
+            upsert: false
+          })
 
-      if (uploadError) {
-        throw uploadError
-      }
+        if (uploadError) {
+          throw uploadError
+        }
 
-      const { data: publicData } = supabase
-        .storage
-        .from('survey-uploads')
-        .getPublicUrl(filePath)
+        const { data: publicData } = supabase
+          .storage
+          .from('survey-uploads')
+          .getPublicUrl(filePath)
 
-      const { error: updateError } = await supabase
-        .from('surveys')
-        .update({
-          photo_path: filePath,
-          photo_url: publicData?.publicUrl ?? null
-        })
-        .eq('id', surveyId)
+        const { error: updateError } = await supabase
+          .from('surveys')
+          .update({
+            photo_path: filePath,
+            photo_url: publicData?.publicUrl ?? null
+          })
+          .eq('id', surveyId)
 
-      if (updateError) {
-        throw updateError
+        if (updateError) {
+          throw updateError
+        }
       }
 
       setStatus({ state: 'success', message: 'Survey submitted successfully.' })
@@ -242,20 +239,33 @@ export default function App() {
       <div className="card">
         <h2>Profiling</h2>
         <p className="hint">Tell us about your business setup.</p>
-        <label className="field">
-          <span>Products</span>
-          <select
-            value={form.profiling.products}
-            onChange={event => updateProfiling('products', event.target.value)}
-          >
-            <option>Tours & Experiences</option>
-            <option>Corporate Travel</option>
-            <option>Inbound Travel (DMC)</option>
-            <option>SaaS / Travel Tech</option>
-            <option>Other</option>
-          </select>
-        </label>
-        {form.profiling.products === 'Other' && (
+        <div className="field">
+          <span>Products (multi-select)</span>
+          <div className="checkbox-grid">
+            {[
+              'Tours & Experiences',
+              'Corporate Travel',
+              'Inbound Travel (DMC)',
+              'SaaS / Travel Tech',
+              'Other'
+            ].map(option => (
+              <label className="checkbox" key={option}>
+                <input
+                  type="checkbox"
+                  checked={form.profiling.products.includes(option)}
+                  onChange={event => {
+                    const next = event.target.checked
+                      ? [...form.profiling.products, option]
+                      : form.profiling.products.filter(item => item !== option)
+                    updateProfiling('products', next)
+                  }}
+                />
+                {option}
+              </label>
+            ))}
+          </div>
+        </div>
+        {form.profiling.products.includes('Other') && (
           <label className="field">
             <span>Other Product</span>
             <input
@@ -268,20 +278,33 @@ export default function App() {
           </label>
         )}
 
-        <label className="field">
-          <span>Audience</span>
-          <select
-            value={form.profiling.audience}
-            onChange={event => updateProfiling('audience', event.target.value)}
-          >
-            <option>Direct Consumers</option>
-            <option>B2B Travel Agents</option>
-            <option>Corporate Clients</option>
-            <option>Schools / Groups</option>
-            <option>Other</option>
-          </select>
-        </label>
-        {form.profiling.audience === 'Other' && (
+        <div className="field">
+          <span>Audience (multi-select)</span>
+          <div className="checkbox-grid">
+            {[
+              'Direct Consumers',
+              'B2B Travel Agents',
+              'Corporate Clients',
+              'Schools / Groups',
+              'Other'
+            ].map(option => (
+              <label className="checkbox" key={option}>
+                <input
+                  type="checkbox"
+                  checked={form.profiling.audience.includes(option)}
+                  onChange={event => {
+                    const next = event.target.checked
+                      ? [...form.profiling.audience, option]
+                      : form.profiling.audience.filter(item => item !== option)
+                    updateProfiling('audience', next)
+                  }}
+                />
+                {option}
+              </label>
+            ))}
+          </div>
+        </div>
+        {form.profiling.audience.includes('Other') && (
           <label className="field">
             <span>Other Audience</span>
             <input
@@ -464,7 +487,7 @@ export default function App() {
     return (
       <div className="card">
         <h2>Capture Photo</h2>
-        <p className="hint">Use your phone camera to take a quick photo.</p>
+        <p className="hint">Optional. Use your phone camera to take a quick photo.</p>
 
         <div className="photo-area">
           {form.photo.previewUrl ? (
@@ -504,15 +527,19 @@ export default function App() {
             <h4>Profiling</h4>
             <p>
               <strong>Products:</strong>{' '}
-              {form.profiling.products === 'Other'
-                ? form.profiling.productsOther || 'Other'
-                : form.profiling.products}
+              {form.profiling.products.length
+                ? form.profiling.products
+                    .map(item => (item === 'Other' ? form.profiling.productsOther || 'Other' : item))
+                    .join(', ')
+                : '-'}
             </p>
             <p>
               <strong>Audience:</strong>{' '}
-              {form.profiling.audience === 'Other'
-                ? form.profiling.audienceOther || 'Other'
-                : form.profiling.audience}
+              {form.profiling.audience.length
+                ? form.profiling.audience
+                    .map(item => (item === 'Other' ? form.profiling.audienceOther || 'Other' : item))
+                    .join(', ')
+                : '-'}
             </p>
             <p><strong>Team size:</strong> {form.profiling.teamSize >= 100 ? '100+' : form.profiling.teamSize}</p>
           </div>
